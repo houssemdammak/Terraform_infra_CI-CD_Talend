@@ -103,7 +103,7 @@ resource "azurerm_network_interface" "talendcicd_nic" {
 
 # Windows VM with Azure Edition Hotpatch
 resource "azurerm_windows_virtual_machine" "talendcicd_vm" {
-  name                = "vm-talendcicd-dev"
+  name                = "VM-TalendCICD"
   resource_group_name = azurerm_resource_group.talendcicd_rg.name
   location            = azurerm_resource_group.talendcicd_rg.location
   size                = "Standard_B2as_v2"
