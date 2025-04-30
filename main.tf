@@ -2,61 +2,70 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~>3.80.0"  
+      version = "~>3.80.0"
     }
   }
 }
 
 provider "azurerm" {
   features {}
-  skip_provider_registration = true  
+  skip_provider_registration = true
 }
 
-resource "azurerm_resource_group" "example" {
-  name     = "example-resources"
+#Resource Group
+resource "azurerm_resource_group" "talendcicd_rg" {
+  name     = "rg-talendcicd-dev"
   location = "France Central"
   tags = {
+    project     = "talend-cicd"
     environment = "dev"
   }
 }
 
-resource "azurerm_virtual_network" "example" {
-  name                = "example-network"
+#Virtual Network
+resource "azurerm_virtual_network" "talendcicd_vnet" {
+  name                = "vnet-talendcicd-dev"
   address_space       = ["10.0.0.0/16"]
-  location            = azurerm_resource_group.example.location
-  resource_group_name = azurerm_resource_group.example.name
+  location            = azurerm_resource_group.talendcicd_rg.location
+  resource_group_name = azurerm_resource_group.talendcicd_rg.name
   tags = {
+    project     = "talend-cicd"
     environment = "dev"
   }
 }
 
-resource "azurerm_subnet" "example" {
-  name                 = "internal"
-  resource_group_name  = azurerm_resource_group.example.name
-  virtual_network_name = azurerm_virtual_network.example.name
+# Subnet
+resource "azurerm_subnet" "talendcicd_subnet" {
+  name                 = "snet-talendcicd-dev"
+  resource_group_name  = azurerm_resource_group.talendcicd_rg.name
+  virtual_network_name = azurerm_virtual_network.talendcicd_vnet.name
   address_prefixes     = ["10.0.2.0/24"]
 }
 
-resource "azurerm_public_ip" "example" {
-  name                = "example-public-ip"
-  location            = azurerm_resource_group.example.location
-  resource_group_name = azurerm_resource_group.example.name
-  allocation_method   = "Static" 
+# Static Public IP
+resource "azurerm_public_ip" "talendcicd_pip" {
+  name                = "pip-talendcicd-dev"
+  location            = azurerm_resource_group.talendcicd_rg.location
+  resource_group_name = azurerm_resource_group.talendcicd_rg.name
+  allocation_method   = "Static"
   tags = {
+    project     = "talend-cicd"
     environment = "dev"
   }
 }
 
-resource "azurerm_network_security_group" "example" {
-  name                = "example-nsg"
-  location            = azurerm_resource_group.example.location
-  resource_group_name = azurerm_resource_group.example.name
+#Network Security Group
+resource "azurerm_network_security_group" "talendcicd_nsg" {
+  name                = "nsg-talendcicd-dev"
+  location            = azurerm_resource_group.talendcicd_rg.location
+  resource_group_name = azurerm_resource_group.talendcicd_rg.name
   tags = {
+    project     = "talend-cicd"
     environment = "dev"
   }
 
   security_rule {
-    name                       = "RDP"
+    name                       = "Allow-RDP"
     priority                   = 1001
     direction                  = "Inbound"
     access                     = "Allow"
@@ -68,40 +77,43 @@ resource "azurerm_network_security_group" "example" {
   }
 }
 
-# Subnet-NSG Association (better than NIC-level)
-resource "azurerm_subnet_network_security_group_association" "example" {
-  subnet_id                 = azurerm_subnet.example.id
-  network_security_group_id = azurerm_network_security_group.example.id
+# NSG → Subnet Association
+resource "azurerm_subnet_network_security_group_association" "talendcicd_subnet_nsg_assoc" {
+  subnet_id                 = azurerm_subnet.talendcicd_subnet.id
+  network_security_group_id = azurerm_network_security_group.talendcicd_nsg.id
 }
 
-resource "azurerm_network_interface" "example" {
-  name                = "example-nic"
-  location            = azurerm_resource_group.example.location
-  resource_group_name = azurerm_resource_group.example.name
+#Network Interface
+resource "azurerm_network_interface" "talendcicd_nic" {
+  name                = "nic-talendcicd-dev"
+  location            = azurerm_resource_group.talendcicd_rg.location
+  resource_group_name = azurerm_resource_group.talendcicd_rg.name
   tags = {
+    project     = "talend-cicd"
     environment = "dev"
   }
 
   ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.example.id
+    name                          = "ipconfig1"
+    subnet_id                     = azurerm_subnet.talendcicd_subnet.id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.example.id
+    public_ip_address_id          = azurerm_public_ip.talendcicd_pip.id
   }
 }
 
-
-resource "azurerm_windows_virtual_machine" "example" {
-  name                = "example-machine"
-  resource_group_name = azurerm_resource_group.example.name
-  location            = azurerm_resource_group.example.location
+# Windows VM with Azure Edition Hotpatch
+resource "azurerm_windows_virtual_machine" "talendcicd_vm" {
+  name                = "vm-talendcicd-dev"
+  resource_group_name = azurerm_resource_group.talendcicd_rg.name
+  location            = azurerm_resource_group.talendcicd_rg.location
   size                = "Standard_B2as_v2"
-  admin_username      = "houssemdammak" 
-  admin_password      = "Houssem2001!"  
+  admin_username      = "houssemdammak"
+  admin_password      = "Houssem2001!"
   network_interface_ids = [
-    azurerm_network_interface.example.id,
+    azurerm_network_interface.talendcicd_nic.id,
   ]
   tags = {
+    project     = "talend-cicd"
     environment = "dev"
   }
 
