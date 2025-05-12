@@ -2,8 +2,11 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      # version = "~>3.80.0"
-      version = "~> 4.0"
+      version = "~> 3.80.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
     }
   }
 }
@@ -13,7 +16,10 @@ provider "azurerm" {
   skip_provider_registration = true
 }
 
-#Resource Group
+# Infos de l'utilisateur Terraform
+data "azurerm_client_config" "current" {}
+
+# Groupe de ressources
 resource "azurerm_resource_group" "talendcicd_rg" {
   name     = "rg-talendcicd-dev"
   location = "France Central"
@@ -23,7 +29,7 @@ resource "azurerm_resource_group" "talendcicd_rg" {
   }
 }
 
-#Virtual Network
+# Réseau virtuel
 resource "azurerm_virtual_network" "talendcicd_vnet" {
   name                = "vnet-talendcicd-dev"
   address_space       = ["10.0.0.0/16"]
@@ -35,7 +41,7 @@ resource "azurerm_virtual_network" "talendcicd_vnet" {
   }
 }
 
-# Subnet
+# Sous-réseau
 resource "azurerm_subnet" "talendcicd_subnet" {
   name                 = "snet-talendcicd-dev"
   resource_group_name  = azurerm_resource_group.talendcicd_rg.name
@@ -43,7 +49,7 @@ resource "azurerm_subnet" "talendcicd_subnet" {
   address_prefixes     = ["10.0.2.0/24"]
 }
 
-# Static Public IP
+#IP publique
 resource "azurerm_public_ip" "talendcicd_pip" {
   name                = "pip-talendcicd-dev"
   location            = azurerm_resource_group.talendcicd_rg.location
@@ -55,7 +61,7 @@ resource "azurerm_public_ip" "talendcicd_pip" {
   }
 }
 
-#Network Security Group
+# NSG
 resource "azurerm_network_security_group" "talendcicd_nsg" {
   name                = "nsg-talendcicd-dev"
   location            = azurerm_resource_group.talendcicd_rg.location
@@ -78,13 +84,13 @@ resource "azurerm_network_security_group" "talendcicd_nsg" {
   }
 }
 
-# NSG → Subnet Association
+# Association NSG/Subnet
 resource "azurerm_subnet_network_security_group_association" "talendcicd_subnet_nsg_assoc" {
   subnet_id                 = azurerm_subnet.talendcicd_subnet.id
   network_security_group_id = azurerm_network_security_group.talendcicd_nsg.id
 }
 
-#Network Interface
+# Interface réseau
 resource "azurerm_network_interface" "talendcicd_nic" {
   name                = "nic-talendcicd-dev"
   location            = azurerm_resource_group.talendcicd_rg.location
@@ -102,14 +108,51 @@ resource "azurerm_network_interface" "talendcicd_nic" {
   }
 }
 
-# Windows VM with Azure Edition Hotpatch
+# Création du Key Vault
+resource "azurerm_key_vault" "talendcicd_kv" {
+  name                        = "kv-talendcicd-dev"
+  location                    = azurerm_resource_group.talendcicd_rg.location
+  resource_group_name         = azurerm_resource_group.talendcicd_rg.name
+  tenant_id                   = data.azurerm_client_config.current.tenant_id
+  sku_name                    = "standard"
+  purge_protection_enabled    = true
+
+  access_policy {
+    tenant_id = data.azurerm_client_config.current.tenant_id
+    object_id = data.azurerm_client_config.current.object_id
+
+    secret_permissions = [
+      "List", "Create", "Delete", "Get", "Purge", "Recover", "Update", "GetRotationPolicy", "SetRotationPolicy"
+    ]
+  }
+
+  tags = {
+    project     = "talend-cicd"
+    environment = "dev"
+  }
+}
+
+# Génération aléatoire du mot de passe
+resource "random_password" "admin_pwd" {
+  length           = 16
+  special          = true
+}
+
+# Stockage du mot de passe dans le Key Vault
+resource "azurerm_key_vault_secret" "admin_password" {
+  name         = "admin-password"
+  value        = random_password.admin_pwd.result
+  key_vault_id = azurerm_key_vault.talendcicd_kv.id
+}
+
+# VM Windows avec mot de passe depuis le Vault
 resource "azurerm_windows_virtual_machine" "talendcicd_vm" {
   name                = "VM-TalendCICD"
   resource_group_name = azurerm_resource_group.talendcicd_rg.name
   location            = azurerm_resource_group.talendcicd_rg.location
   size                = "Standard_B2as_v2"
   admin_username      = "houssemdammak"
-  admin_password      = "Houssem2001!"
+  admin_password      = azurerm_key_vault_secret.admin_password.value
   network_interface_ids = [
     azurerm_network_interface.talendcicd_nic.id,
   ]
