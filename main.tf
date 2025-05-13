@@ -108,42 +108,9 @@ resource "azurerm_network_interface" "talendcicd_nic" {
   }
 }
 
-# Création du Key Vault
-resource "azurerm_key_vault" "talendcicd_kv" {
-  name                        = "kv-talendcicd-dev"
-  location                    = azurerm_resource_group.talendcicd_rg.location
-  resource_group_name         = azurerm_resource_group.talendcicd_rg.name
-  tenant_id                   = data.azurerm_client_config.current.tenant_id
-  sku_name                    = "standard"
-  purge_protection_enabled    = true
 
-  access_policy {
-    tenant_id = data.azurerm_client_config.current.tenant_id
-    object_id = data.azurerm_client_config.current.object_id
 
-    secret_permissions = [
-      "List", "Create", "Delete", "Get", "Purge", "Recover", "Update", "GetRotationPolicy", "SetRotationPolicy"
-    ]
-  }
 
-  tags = {
-    project     = "talend-cicd"
-    environment = "dev"
-  }
-}
-
-# Génération aléatoire du mot de passe
-resource "random_password" "admin_pwd" {
-  length           = 16
-  special          = true
-}
-
-# Stockage du mot de passe dans le Key Vault
-resource "azurerm_key_vault_secret" "admin_password" {
-  name         = "admin-password"
-  value        = random_password.admin_pwd.result
-  key_vault_id = azurerm_key_vault.talendcicd_kv.id
-}
 
 # VM Windows avec mot de passe depuis le Vault
 resource "azurerm_windows_virtual_machine" "talendcicd_vm" {
@@ -152,7 +119,7 @@ resource "azurerm_windows_virtual_machine" "talendcicd_vm" {
   location            = azurerm_resource_group.talendcicd_rg.location
   size                = "Standard_B2as_v2"
   admin_username      = "houssemdammak"
-  admin_password      = azurerm_key_vault_secret.admin_password.value
+  admin_password      = var.vm_admin_password
   network_interface_ids = [
     azurerm_network_interface.talendcicd_nic.id,
   ]
