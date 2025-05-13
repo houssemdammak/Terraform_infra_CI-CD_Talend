@@ -1,18 +1,9 @@
-name: Terraform CI/CD
+name: Terraform Deploy
 
 on:
-  workflow_dispatch:
-    inputs:
-      action:
-        description: 'Terraform action (plan/apply/destroy)'
-        required: true
-        default: 'plan'
-        type: choice
-        options:
-          - plan
-          - apply
-          - destroy
-
+  workflow_dispatch: 
+  # push:
+  #   branches: [ main ] 
 env:
   ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -22,10 +13,14 @@ env:
 
 jobs:
   terraform:
+    name: Terraform
     runs-on: ubuntu-latest
+    environment: production 
+
     steps:
-      - uses: actions/checkout@v3
-      
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
@@ -35,13 +30,8 @@ jobs:
         run: terraform init
 
       - name: Terraform Plan
-        if: github.event.inputs.action == 'plan'
         run: terraform plan -no-color
+        continue-on-error: true
 
       - name: Terraform Apply
-        if: github.event.inputs.action == 'apply'
         run: terraform apply -auto-approve
-
-      - name: Terraform Destroy
-        if: github.event.inputs.action == 'destroy'
-        run: terraform destroy -auto-approve
